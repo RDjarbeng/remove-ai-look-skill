@@ -35,6 +35,10 @@ python skills/remove-ai-look/scripts/check_ai_defaults.py path/to/project
 
 It reports each finding as `file:line: rule: matched text` and exits 1 if it finds any, so it can run in CI. The rules are `stock-accent`, `stock-gradient`, `reflex-card`, `stock-font` and `stock-copy`.
 
+## License
+
+MIT. See [LICENSE](LICENSE).
+
 ## Credit
 
 Based on ideas from ["How to fix the 'AI-generated' look in your frontend"](https://dev.to/alanwest/how-to-fix-the-ai-generated-look-in-your-frontend-1ahh) by Alan West.
