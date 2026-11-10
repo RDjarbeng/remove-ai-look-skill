@@ -1,0 +1,11 @@
+{
+  "name": "remove-ai-look",
+  "version": "1.0.0",
+  "description": "Stops frontends from looking AI-generated: audits for stock defaults, then enforces a deliberate design vocabulary.",
+  "author": {
+    "name": "RDjarbeng",
+    "url": "https://rdjarbeng.com/about/"
+  },
+  "homepage": "https://rdjarbeng.com/about/",
+  "repository": "https://github.com/RDjarbeng/remove-ai-look-skill"
+}

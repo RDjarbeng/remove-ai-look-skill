@@ -1,0 +1,14 @@
+{
+  "name": "remove-ai-look-skill",
+  "owner": {
+    "name": "RDjarbeng",
+    "url": "https://rdjarbeng.com/about/"
+  },
+  "plugins": [
+    {
+      "name": "remove-ai-look",
+      "source": "./",
+      "description": "Stops frontends from looking AI-generated: audits for stock defaults, then enforces a deliberate design vocabulary."
+    }
+  ]
+}
