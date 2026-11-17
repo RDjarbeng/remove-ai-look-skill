@@ -42,6 +42,10 @@ MULTI_WORD_COPY_PATTERNS = [
     re.compile(r'\bseamless\s+integration\b', re.I),
     re.compile(r'\bbuilt\s+for\s+modern\s+teams\b', re.I),
     re.compile(r'\btake\s+your\s+[\w\s\'-]{1,30}?\s+to\s+the\s+next\s+level\b', re.I),
+    re.compile(r'\b(?:supercharge|elevate)\s+your(?:\s+[\w\'-]+){0,6}', re.I),
+    re.compile(r'\bharness\s+the\s+power\s+of\b', re.I),
+    re.compile(r'\b(?:cutting-edge|next-gen(?:eration)?|blazing(?:ly)?[- ]fast|lightning[- ]fast)\b', re.I),
+    re.compile(r'\b(?:system|engine|core|neural\s+core)\s+(?:online|active|engaged|armed)\b', re.I),
 ]
 RE_REVOLUTIONIZE = re.compile(r'\brevolutionize\w*\b', re.I)
 
@@ -167,6 +171,138 @@ def check_stock_copy(line: str, ext: str):
     return results
 
 
+# ---- Mission-control / glow / glass / emoji rules -------------------------
+
+RE_HEX = re.compile(r'#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b')
+RE_RGB = re.compile(r'rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})')
+RE_NEON_NAME = re.compile(r'(?i)(?:--|\$)[\w-]*(?:neon|phosphor|glow)[\w-]*(?=\s*:)')
+
+RE_GLOW_SHADOW = re.compile(
+    r'(?i)(?:box-shadow|text-shadow|boxShadow|textShadow)\s*[:=]\s*[\'"]?\s*(?:inset\s+)?0(?:px)?\s+0(?:px)?\s+(?!0(?:px)?\s)\d+(?:\.\d+)?px(?:\s+-?\d+px)?\s+(?!rgba?\(\s*0\s*,\s*0\s*,\s*0)(?:#|rgba?\(|hsla?\(|var\()'
+)
+RE_DROP_SHADOW_GLOW = re.compile(r'(?i)drop-shadow\(\s*0(?:px)?\s+0(?:px)?\s+\d+px\s+(?!rgba?\(\s*0\s*,\s*0\s*,\s*0)(?:#|rgba?\(|hsla?\(|var\()')
+RE_CANVAS_GLOW = re.compile(r'\bshadowBlur\s*=\s*(?!0\b)\d+')
+RE_TW_GLOW = re.compile(
+    r'(?<![\w-])(?:[a-zA-Z0-9_\-]+:)*(?:shadow-(?:cyan|sky|teal|emerald|green|lime|fuchsia|pink|blue)-\d+(?:/\d+)?|drop-shadow-\[0_0_[^\]]+\]|shadow-\[0_0_[^\]]+\])'
+)
+
+RE_GLASS = re.compile(r'(?i)(?:backdrop-filter\s*:\s*[^;]*blur|backdropFilter\s*:\s*[\'"][^\'"]*blur|(?<![\w-])backdrop-blur(?:-[a-z0-9]+)?(?![\w-]))')
+RE_GRADIENT_TEXT = re.compile(r'(?i)(?:(?:-webkit-)?background-clip\s*:\s*text|backgroundClip\s*:\s*[\'"]text|(?<![\w-])bg-clip-text(?![\w-]))')
+
+RE_TW_DARK_NAVY = re.compile(r'(?<![\w-])(?:[a-zA-Z0-9_\-]+:)*bg-(?:slate|gray|zinc|neutral)-(?:900|950)(?![\w-])')
+RE_BG_DECL = re.compile(r'(?i)(?:background(?:-color)?|--[\w-]*(?:bg|background|surface|panel|chassis|canvas)[\w-]*)\s*:')
+
+RE_EMOJI = re.compile(
+    '[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U00002B00-\U00002BFF\U0001F000-\U0001F2FF]'
+)
+RE_UI_TAG_TEXT = re.compile(r'(?i)<(?:button|a|h[1-6]|label|summary|th|option|span|div)\b[^>]*>([^<]*)')
+
+RE_UPPERCASE = re.compile(r'(?i)(?:text-transform\s*:\s*uppercase|textTransform\s*:\s*[\'"]uppercase|(?<![\w-])uppercase(?![\w-]))')
+RE_TRACKING = re.compile(r'(?i)(?:letter-spacing\s*:\s*0?\.\d+em|letterSpacing\s*:|(?<![\w-])tracking-(?:wide|wider|widest|\[[^\]]+\])(?![\w-]))')
+RE_MONO_USE = re.compile(r'(?i)(?:font-family\s*:\s*var\(--[\w-]*mono[\w-]*\)|font-family\s*:\s*[^;]*monospace|(?<![\w-])font-mono(?![\w-]))')
+
+
+def _hex_to_rgb(h):
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _hsv(rgb):
+    r, g, b = (c / 255 for c in rgb)
+    mx, mn = max(r, g, b), min(r, g, b)
+    d = mx - mn
+    if d == 0:
+        hue = 0.0
+    elif mx == r:
+        hue = (60 * ((g - b) / d)) % 360
+    elif mx == g:
+        hue = 60 * ((b - r) / d) + 120
+    else:
+        hue = 60 * ((r - g) / d) + 240
+    sat = 0 if mx == 0 else d / mx
+    return hue, sat, mx
+
+
+def _is_neon(rgb):
+    hue, sat, val = _hsv(rgb)
+    if sat < 0.85 or val < 0.9:
+        return False
+    # cyan/aqua, electric green/lime, hot magenta
+    return 75 <= hue <= 200 or 285 <= hue <= 330
+
+
+def _is_dark_navy(rgb):
+    hue, sat, val = _hsv(rgb)
+    return val <= 0.13 and sat >= 0.2 and 195 <= hue <= 250
+
+
+def _colours(line):
+    for m in RE_HEX.finditer(line):
+        yield m.group(0), _hex_to_rgb(m.group(1))
+    for m in RE_RGB.finditer(line):
+        rgb = tuple(int(x) for x in m.groups())
+        if all(c <= 255 for c in rgb):
+            yield m.group(0), rgb
+
+
+def _is_comment(line):
+    return line.strip().startswith(("//", "/*", "*", "<!--"))
+
+
+def check_neon(line: str):
+    if _is_comment(line):
+        return []
+    results = [text for text, rgb in _colours(line) if _is_neon(rgb)]
+    results += [m.group(0) for m in RE_NEON_NAME.finditer(line)]
+    return results
+
+
+def check_glow(line: str):
+    if _is_comment(line):
+        return []
+    results = []
+    for rx in (RE_GLOW_SHADOW, RE_DROP_SHADOW_GLOW, RE_CANVAS_GLOW, RE_TW_GLOW):
+        results += [m.group(0) for m in rx.finditer(line)]
+    return results
+
+
+def check_dark_navy(line: str):
+    if _is_comment(line):
+        return []
+    results = [m.group(0) for m in RE_TW_DARK_NAVY.finditer(line)]
+    if RE_BG_DECL.search(line):
+        results += [text for text, rgb in _colours(line) if _is_dark_navy(rgb)]
+    return results
+
+
+def check_glass(line: str):
+    if _is_comment(line):
+        return []
+    return [m.group(0) for m in RE_GLASS.finditer(line)]
+
+
+def check_gradient_text(line: str):
+    if _is_comment(line):
+        return []
+    return [m.group(0) for m in RE_GRADIENT_TEXT.finditer(line)]
+
+
+def check_emoji_ui(line: str, ext: str):
+    if ext in (".md", ".mdx", ".css", ".scss") or _is_comment(line):
+        return []
+    results = []
+    for m in RE_UI_TAG_TEXT.finditer(line):
+        text = m.group(1)
+        if RE_EMOJI.search(text):
+            results.append(text.strip()[:60])
+    return results
+
+
+HUD_TYPE_THRESHOLD = 4
+HUD_MONO_THRESHOLD = 8
+
+
 def should_skip_file(path: Path) -> bool:
     if path.suffix.lower() not in ALLOWED_EXTENSIONS:
         return True
@@ -203,6 +339,8 @@ def scan_file(filepath: Path):
     findings = []
     ext = filepath.suffix.lower()
     in_gradient_block = False
+    upper_lines, tracking_lines, mono_lines = [], [], []
+    navy_findings = []
 
     try:
         with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
@@ -222,8 +360,46 @@ def scan_file(filepath: Path):
 
                 for text in check_stock_copy(line, ext):
                     findings.append((line_no, "stock-copy", text))
+
+                for text in check_neon(line):
+                    findings.append((line_no, "neon-color", text))
+
+                for text in check_glow(line):
+                    findings.append((line_no, "glow", text))
+
+                for text in check_dark_navy(line):
+                    navy_findings.append((line_no, "dark-navy", text))
+
+                for text in check_glass(line):
+                    findings.append((line_no, "glass", text))
+
+                for text in check_gradient_text(line):
+                    findings.append((line_no, "gradient-text", text))
+
+                for text in check_emoji_ui(line, ext):
+                    findings.append((line_no, "emoji-ui", text))
+
+                if not _is_comment(line):
+                    if RE_UPPERCASE.search(line):
+                        upper_lines.append(line_no)
+                    if RE_TRACKING.search(line):
+                        tracking_lines.append(line_no)
+                    if RE_MONO_USE.search(line):
+                        mono_lines.append(line_no)
     except Exception:
         pass
+
+    # Dark blue-black surfaces are fine alone (e.g. GitHub dark); they are the
+    # mission-control fingerprint only when paired with neon accents.
+    if any(rule == "neon-color" for _, rule, _ in findings):
+        findings.extend(navy_findings)
+    if len(upper_lines) >= HUD_TYPE_THRESHOLD and len(tracking_lines) >= HUD_TYPE_THRESHOLD:
+        findings.append((upper_lines[0], "hud-type",
+                         f"{len(upper_lines)} uppercase + {len(tracking_lines)} letter-spaced rules (caps labels everywhere)"))
+    if len(mono_lines) >= HUD_MONO_THRESHOLD:
+        findings.append((mono_lines[0], "hud-type",
+                         f"monospace used in {len(mono_lines)} places (mono beyond code and numbers)"))
+    findings.sort(key=lambda f: f[0])
 
     return findings
 
@@ -239,6 +415,13 @@ def main():
         "reflex-card": 0,
         "stock-font": 0,
         "stock-copy": 0,
+        "neon-color": 0,
+        "glow": 0,
+        "dark-navy": 0,
+        "glass": 0,
+        "gradient-text": 0,
+        "emoji-ui": 0,
+        "hud-type": 0,
     }
 
     total_findings = 0
@@ -255,14 +438,13 @@ def main():
                 formatted = formatted[:160]
             print(formatted)
 
+    breakdown = ", ".join(f"{rule}: {n}" for rule, n in counts.items())
     summary = (
         f"Summary: {total_findings} finding{'s' if total_findings != 1 else ''} "
-        f"(stock-accent: {counts['stock-accent']}, "
-        f"stock-gradient: {counts['stock-gradient']}, "
-        f"reflex-card: {counts['reflex-card']}, "
-        f"stock-font: {counts['stock-font']}, "
-        f"stock-copy: {counts['stock-copy']})"
+        f"({breakdown})"
     )
+    if total_findings == 0:
+        summary += "\nNo known fingerprints found. This does not prove the page looks designed: check it by eye too."
     print(summary)
 
     sys.exit(1 if total_findings > 0 else 0)

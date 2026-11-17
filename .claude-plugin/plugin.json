@@ -1,6 +1,6 @@
 {
   "name": "remove-ai-look",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "license": "MIT",
   "description": "Stops frontends from looking AI-generated: audits for stock defaults, then enforces a deliberate design vocabulary.",
   "author": {
